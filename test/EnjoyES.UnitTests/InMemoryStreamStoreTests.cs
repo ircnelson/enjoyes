@@ -13,7 +13,7 @@ namespace EnjoyES.UnitTests
     public class InMemoryStreamStoreTests
     {
         [Fact]
-        public Task Should_create_an_instance_of_InMemoryStreamStore()
+        public void Should_create_an_instance_of_InMemoryStreamStore()
         {
             // Arrange
             var factory = new InMemoryStreamStoreFactory();
@@ -23,8 +23,6 @@ namespace EnjoyES.UnitTests
 
             // Assert
             instance.GetType().Should().Be(typeof(InMemoryStreamStore));
-
-            return Task.CompletedTask;
         }
 
         [Fact]
@@ -80,7 +78,7 @@ namespace EnjoyES.UnitTests
                 assertion.And.ExpectedVersion.Should().Be(1);
             }
         }
-
+        
         [Fact]
         public async Task Should_append_itens_with_correct_version()
         {
@@ -107,6 +105,35 @@ namespace EnjoyES.UnitTests
                 streams[1].Version.Should().Be(1);
                 streams[2].Version.Should().Be(2);
             }
+        }
+
+        [Fact]
+        public void When_concurrency_operation_Then_throws_exception()
+        {
+            // Arrange
+            var factory = new InMemoryStreamStoreFactory();
+
+            var streamId = Guid.NewGuid();
+            var content = Encoding.ASCII.GetBytes("Hello World");
+
+            var streamStore = factory.Create();
+
+            // Act
+            Action act = () => RunConcurrencyOperations(streamId, content, streamStore);
+
+            // Assert
+            var assertion = act.ShouldThrowExactly<WrongExpectedVersionException>();
+
+            assertion.And.CurrentVersion.Should().Be(0);
+            assertion.And.ExpectedVersion.Should().Be(-1);
+        }
+
+        private static void RunConcurrencyOperations(Guid streamId, byte[] content, InMemoryStreamStore streamStore)
+        {
+            var t1 = streamStore.AppendStreamAsync(streamId, "ItemCreated", ExpectedVersion.NoStream, content);
+            var t2 = streamStore.AppendStreamAsync(streamId, "ItemCreated", ExpectedVersion.NoStream, content);
+
+            Task.WaitAll(t1, t2);
         }
     }
 }
