@@ -10,29 +10,23 @@ namespace EnjoyES.Defaults.Stores
 {
     public class InMemoryStreamStore : IStreamStore<InMemoryStreamRecord>
     {
-        private static ConcurrentDictionary<Guid, InMemoryStreamCollection> _items = new ConcurrentDictionary<Guid, InMemoryStreamCollection>();
+        private static ConcurrentDictionary<string, InMemoryStreamCollection> _items = new ConcurrentDictionary<string, InMemoryStreamCollection>();
 
-        public Task AppendStreamAsync(Guid id, string name, long expectedVersion, byte[] content, byte?[] metadata = null)
+        public Task AppendStreamAsync(string stream, long expectedVersion, params InMemoryStreamRecord[] records)
         {
-            CheckExpectedVersion(id, expectedVersion);
-
-            var newStreamRecord = new InMemoryStreamRecord(name, 0, content, metadata);
-
-            _items.AddOrUpdate(id, new InMemoryStreamCollection { newStreamRecord }, (streamId, streamItems) =>
+            CheckExpectedVersion(stream, expectedVersion);
+            
+            _items.AddOrUpdate(stream, new InMemoryStreamCollection(records.ToArray()), (streamId, streamItems) =>
             {
-                var version = streamItems.LatestVersion + 1;
+                streamItems.AddRange(records);
 
-                newStreamRecord = new InMemoryStreamRecord(name, version, content, metadata);
-
-                streamItems.Add(newStreamRecord);
-                
                 return streamItems;
             });
-
+            
             return Task.CompletedTask;
         }
         
-        public Task<IEnumerable<InMemoryStreamRecord>> GetForwardStreamsAsync(Guid id, long version = 1)
+        public Task<IEnumerable<InMemoryStreamRecord>> GetForwardStreamsAsync(string stream, long version = 1)
         {
             throw new NotImplementedException();
         }
@@ -42,36 +36,32 @@ namespace EnjoyES.Defaults.Stores
             throw new NotImplementedException();
         }
 
-        public Task<IEnumerable<InMemoryStreamRecord>> GetStreamsAsync(Guid id)
+        public Task<IEnumerable<InMemoryStreamRecord>> GetStreamsAsync(string stream)
         {
             var records = Enumerable.Empty<InMemoryStreamRecord>();
 
-            if (_items.ContainsKey(id))
-                records = _items[id].AsEnumerable();
+            if (_items.ContainsKey(stream))
+                records = _items[stream].AsEnumerable();
             
             return Task.FromResult(records);
         }
-
-        public Task<IEnumerable<InMemoryStreamRecord>> GetStreamsAsync(Guid id, string name)
-        {
-            throw new NotImplementedException();
-        }
+        
         public void Dispose()
         {
         }
 
-        private void CheckExpectedVersion(Guid id, long expectedVersion)
+        private void CheckExpectedVersion(string stream, long expectedVersion)
         {
             if (expectedVersion == ExpectedVersion.Any) return;
 
-            if (!_items.ContainsKey(id) && expectedVersion != ExpectedVersion.NoStream)
+            if (!_items.ContainsKey(stream) && expectedVersion != ExpectedVersion.NoStream)
             {
-                throw new WrongExpectedVersionException(ExpectedVersion.NoStream, expectedVersion);
+                throw new ConcurrencyException(ExpectedVersion.NoStream, expectedVersion);
             }
 
-            else if (_items.ContainsKey(id) && _items[id].LatestVersion != expectedVersion)
+            else if (_items.ContainsKey(stream) && _items[stream].LatestVersion != expectedVersion)
             {
-                throw new WrongExpectedVersionException(_items[id].LatestVersion, expectedVersion);
+                throw new ConcurrencyException(_items[stream].LatestVersion, expectedVersion);
             }
         }
     }

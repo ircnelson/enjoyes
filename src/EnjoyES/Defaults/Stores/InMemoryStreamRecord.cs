@@ -1,18 +1,19 @@
-﻿using EnjoyES.Stores;
+﻿using System;
+using EnjoyES.Stores;
 
 namespace EnjoyES.Defaults.Stores
 {
     public class InMemoryStreamRecord : IStreamRecord
     {
-        public string Name { get; }
-        public long Version { get; }
+        public Guid Id { get; }
+        public string Type { get; }
         public byte[] Content { get; }
         public byte?[] Metadata { get; }
-        
-        public InMemoryStreamRecord(string name, long version, byte[] content, byte?[] metadata = null)
+
+        public InMemoryStreamRecord(Guid id, string type, byte[] content, byte?[] metadata = null)
         {
-            Name = name;
-            Version = version;
+            Id = id;
+            Type = type;
             Content = content;
             Metadata = metadata;
         }

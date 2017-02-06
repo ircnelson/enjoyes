@@ -1,16 +1,18 @@
-﻿namespace EnjoyES.Stores
+﻿using System;
+
+namespace EnjoyES.Stores
 {
     public interface IStreamRecord
     {
         /// <summary>
-        /// Stream Version.
+        /// Unique Identifier.
         /// </summary>
-        long Version { get; }
-
+        Guid Id { get; }
+        
         /// <summary>
         /// Stream name.
         /// </summary>
-        string Name { get; }
+        string Type { get; }
 
         /// <summary>
         /// Byte array of event content.

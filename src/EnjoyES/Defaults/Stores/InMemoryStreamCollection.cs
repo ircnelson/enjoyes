@@ -13,23 +13,28 @@ namespace EnjoyES.Defaults.Stores
 
         public InMemoryStreamCollection(params InMemoryStreamRecord[] items)
         {
-            foreach (var item in items)
-            {
-                _collection.Add(item);
-            }
+            AddRange(items);
         }
 
         public void Add(InMemoryStreamRecord item)
         {
             _collection.Add(item);
 
-            LatestVersion = item.Version;
+            LatestVersion++;
+        }
+
+        public void AddRange(IEnumerable<InMemoryStreamRecord> items)
+        {
+            foreach (var item in items)
+            {
+                Add(item);
+            }
         }
 
         public IEnumerator<InMemoryStreamRecord> GetEnumerator()
         {
             return _collection
-                .OrderBy(o => o.Version)
+                .Reverse()
                 .GetEnumerator();
         }
 

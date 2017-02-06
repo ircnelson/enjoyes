@@ -31,13 +31,13 @@ namespace EnjoyES.UnitTests
             // Arrange
             var factory = new InMemoryStreamStoreFactory();
 
-            var streamId = Guid.NewGuid();
+            var streamId = Guid.NewGuid().ToString();
             var content = Encoding.ASCII.GetBytes("Hello World");
             
             // Act
             using (var streamStore = factory.Create())
             {
-                await streamStore.AppendStreamAsync(streamId, "ItemCreated", -1, content);
+                await streamStore.AppendStreamAsync(streamId, -1, CreateRecord("ItemCreated", content));
             }
 
             // Assert
@@ -57,23 +57,23 @@ namespace EnjoyES.UnitTests
             // Arrange
             var factory = new InMemoryStreamStoreFactory();
 
-            var streamId = Guid.NewGuid();
+            var streamId = Guid.NewGuid().ToString();
             var content = Encoding.ASCII.GetBytes("Hello World");
 
             using (var streamStore = factory.Create())
             {
-                await streamStore.AppendStreamAsync(streamId, "ItemCreated", ExpectedVersion.NoStream, content);
-                await streamStore.AppendStreamAsync(streamId, "ItemCreated", ExpectedVersion.Any, content);
-                await streamStore.AppendStreamAsync(streamId, "ItemCreated", ExpectedVersion.Any, content);
+                await streamStore.AppendStreamAsync(streamId, ExpectedVersion.NoStream, CreateRecord("ItemCreated"));
+                await streamStore.AppendStreamAsync(streamId, ExpectedVersion.Any, CreateRecord("ItemCreated"));
+                await streamStore.AppendStreamAsync(streamId, ExpectedVersion.Any, CreateRecord("ItemCreated"));
             }
 
             using (var streamStore = factory.Create())
             {
                 // Act
-                Func<Task> func = async () => await streamStore.AppendStreamAsync(streamId, "ItemCreated", 1, content);
+                Func<Task> func = async () => await streamStore.AppendStreamAsync(streamId, 1, CreateRecord("ItemCreated"));
 
                 // Assert
-                var assertion = func.ShouldThrowExactly<WrongExpectedVersionException>();
+                var assertion = func.ShouldThrowExactly<ConcurrencyException>();
                 assertion.And.CurrentVersion.Should().Be(2);
                 assertion.And.ExpectedVersion.Should().Be(1);
             }
@@ -85,15 +85,14 @@ namespace EnjoyES.UnitTests
             // Arrange
             var factory = new InMemoryStreamStoreFactory();
              
-            var streamId = Guid.NewGuid();
-            var content = Encoding.ASCII.GetBytes("Hello World");
+            var streamId = Guid.NewGuid().ToString();
 
             // Act
             using (var streamStore = factory.Create())
             {
-                await streamStore.AppendStreamAsync(streamId, "ItemCreated", ExpectedVersion.NoStream, content);
-                await streamStore.AppendStreamAsync(streamId, "ItemCreated", ExpectedVersion.Any, content);
-                await streamStore.AppendStreamAsync(streamId, "ItemCreated", ExpectedVersion.Any, content);
+                await streamStore.AppendStreamAsync(streamId, ExpectedVersion.NoStream, CreateRecord("ItemCreated"));
+                await streamStore.AppendStreamAsync(streamId, ExpectedVersion.Any, CreateRecord("ItemChanged"));
+                await streamStore.AppendStreamAsync(streamId, ExpectedVersion.Any, CreateRecord("ItemRemoved"));
             }
 
             // Assert
@@ -101,9 +100,9 @@ namespace EnjoyES.UnitTests
             {
                 var streams = (await streamStore.GetStreamsAsync(streamId)).ToList();
 
-                streams[0].Version.Should().Be(0);
-                streams[1].Version.Should().Be(1);
-                streams[2].Version.Should().Be(2);
+                streams[0].Type.Should().Be("ItemCreated");
+                streams[1].Type.Should().Be("ItemChanged");
+                streams[2].Type.Should().Be("ItemRemoved");
             }
         }
 
@@ -113,27 +112,32 @@ namespace EnjoyES.UnitTests
             // Arrange
             var factory = new InMemoryStreamStoreFactory();
 
-            var streamId = Guid.NewGuid();
-            var content = Encoding.ASCII.GetBytes("Hello World");
-
+            var streamId = Guid.NewGuid().ToString();
             var streamStore = factory.Create();
 
             // Act
-            Action act = () => RunConcurrencyOperations(streamId, content, streamStore);
+            Action act = () => RunConcurrencyOperations(streamId, streamStore);
 
             // Assert
-            var assertion = act.ShouldThrowExactly<WrongExpectedVersionException>();
+            var assertion = act.ShouldThrowExactly<ConcurrencyException>();
 
             assertion.And.CurrentVersion.Should().Be(0);
             assertion.And.ExpectedVersion.Should().Be(-1);
         }
 
-        private static void RunConcurrencyOperations(Guid streamId, byte[] content, InMemoryStreamStore streamStore)
+        private static void RunConcurrencyOperations(string streamId, InMemoryStreamStore streamStore)
         {
-            var t1 = streamStore.AppendStreamAsync(streamId, "ItemCreated", ExpectedVersion.NoStream, content);
-            var t2 = streamStore.AppendStreamAsync(streamId, "ItemCreated", ExpectedVersion.NoStream, content);
+            var t1 = streamStore.AppendStreamAsync(streamId, ExpectedVersion.NoStream, CreateRecord("ItemCreated"));
+            var t2 = streamStore.AppendStreamAsync(streamId, ExpectedVersion.NoStream, CreateRecord("ItemCreated"));
 
             Task.WaitAll(t1, t2);
+        }
+
+        private static InMemoryStreamRecord CreateRecord(string type, byte[] content = null)
+        {
+            content = content ?? Encoding.ASCII.GetBytes("Hello World");
+
+            return new InMemoryStreamRecord(Guid.NewGuid(), type, content);
         }
     }
 }
